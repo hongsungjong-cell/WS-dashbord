@@ -666,88 +666,91 @@ function showChartOrEmpty(canvasId, nodataId, wrapId, hasData){
 // ===== TREND CHARTS =====
 async function loadTrendCharts(){
   destroyChart('trend'); destroyChart('mtd');
-  const {data,error}=await sb.from('sales_kpi').select('recorded_at,ap,fcst,mtd,ly,bd_used,bd_total').order('recorded_at');
+  const {data,error}=await sb.from('monthly_brand_hl').select('*').order('year_month');
   const hasData=!error&&data&&data.length>0;
   showChartOrEmpty('trend-chart','trend-nodata','trend-wrap',hasData);
   showChartOrEmpty('mtd-chart','mtd-nodata','mtd-wrap',hasData);
-  if(!hasData) return;
+  if(!hasData){console.warn('monthly_brand_hl error:',error);return;}
 
-  const labels=data.map(d=>d.recorded_at);
-  const commonOpts={
-    responsive:true, maintainAspectRatio:false,
-    plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',boxWidth:12}}},
-    scales:{
-      x:{ticks:{color:'rgba(255,255,255,0.45)',maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.05)'}},
-      y:{ticks:{color:'rgba(255,255,255,0.45)'},grid:{color:'rgba(255,255,255,0.05)'}}
-    }
-  };
+  const months=[...new Set(data.map(d=>d.year_month))].sort();
+  const brands=[...new Set(data.map(d=>d.brand))].filter(Boolean);
+  const palette={'Heineken':'#22c55e','Tiger':'#3b82f6','Edelweiss':'#a78bfa','Desperados':'#f59e0b','Birra Moretti':'#ec4899','Amstel':'#06b6d4','Sol':'#f97316','Lagunitas':'#84cc16','Gold':'#eab308'};
 
-  // HL 추세 라인 차트
-  chartInst.trend=new Chart(document.getElementById('trend-chart').getContext('2d'),{
-    type:'line',
-    data:{
-      labels,
-      datasets:[
-        {label:'FCST (HL)',data:data.map(d=>d.fcst),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.08)',fill:true,tension:0.3,pointRadius:3},
-        {label:'AP 목표',data:data.map(d=>d.ap),borderColor:'#3b82f6',backgroundColor:'transparent',borderDash:[6,4],tension:0.3,pointRadius:2},
-        {label:'LY 실적',data:data.map(d=>d.ly),borderColor:'#f59e0b',backgroundColor:'transparent',borderDash:[3,3],tension:0.3,pointRadius:2}
-      ]
-    },
-    options:{...commonOpts, plugins:{...commonOpts.plugins, tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y?.toLocaleString()} HL`}}}}
+  const datasets=brands.map((brand,i)=>{
+    const color=palette[brand]||`hsl(${(i*41)%360},65%,55%)`;
+    return {
+      label:brand,
+      data:months.map(m=>{const r=data.find(d=>d.brand===brand&&d.year_month===m);return r?parseFloat(r.total_hl):0;}),
+      borderColor:color,backgroundColor:color+'18',fill:false,tension:0.3,pointRadius:3
+    };
   });
 
-  // MTD 달성률 라인 차트
-  const mtdPct=data.map(d=>d.ap?((d.mtd/d.ap)*100).toFixed(1):null);
-  const bdPct=data.map(d=>d.bd_total?((d.bd_used/d.bd_total)*100).toFixed(1):null);
-  chartInst.mtd=new Chart(document.getElementById('mtd-chart').getContext('2d'),{
+  const commonScales={
+    x:{ticks:{color:'rgba(255,255,255,0.45)',maxTicksLimit:14},grid:{color:'rgba(255,255,255,0.05)'}},
+    y:{ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v.toLocaleString()+' HL'},grid:{color:'rgba(255,255,255,0.05)'}}
+  };
+
+  chartInst.trend=new Chart(document.getElementById('trend-chart').getContext('2d'),{
     type:'line',
+    data:{labels:months,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y.toLocaleString()} HL`}}},
+      scales:commonScales
+    }
+  });
+
+  // 월별 전체 HL 합계 + 전월 대비 증감률
+  const monthTotals=months.map(m=>data.filter(d=>d.year_month===m).reduce((s,d)=>s+parseFloat(d.total_hl||0),0));
+  const mom=monthTotals.map((v,i)=>i===0?null:monthTotals[i-1]>0?((v-monthTotals[i-1])/monthTotals[i-1]*100).toFixed(1):null);
+
+  chartInst.mtd=new Chart(document.getElementById('mtd-chart').getContext('2d'),{
+    type:'bar',
     data:{
-      labels,
+      labels:months,
       datasets:[
-        {label:'MTD 달성률 (%)',data:mtdPct,borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,0.08)',fill:true,tension:0.3,pointRadius:3},
-        {label:'영업일 경과율 (%)',data:bdPct,borderColor:'rgba(255,255,255,0.3)',backgroundColor:'transparent',borderDash:[4,4],tension:0.3,pointRadius:2}
+        {type:'line',label:'월 총 HL',data:monthTotals.map(v=>v.toFixed(1)),borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,0.12)',fill:true,tension:0.3,pointRadius:3,yAxisID:'y'},
+        {label:'전월 대비 (%)',data:mom,backgroundColor:mom.map(v=>v===null?'transparent':parseFloat(v)>=0?'rgba(34,197,94,0.55)':'rgba(239,68,68,0.55)'),borderRadius:3,yAxisID:'y2'}
       ]
     },
-    options:{...commonOpts, scales:{...commonOpts.scales, y:{...commonOpts.scales.y, ticks:{...commonOpts.scales.y.ticks,callback:v=>v+'%'}}}}
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',boxWidth:12}}},
+      scales:{
+        x:{ticks:{color:'rgba(255,255,255,0.45)',maxTicksLimit:14},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{position:'left',ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v.toLocaleString()+' HL'},grid:{color:'rgba(255,255,255,0.05)'}},
+        y2:{position:'right',ticks:{color:'rgba(255,255,255,0.3)',callback:v=>v+'%'},grid:{display:false}}
+      }
+    }
   });
 }
 
 // ===== SKU CHART =====
 async function loadSkuChart(){
   destroyChart('sku');
-  // 가장 최근 날짜의 SKU 데이터 조회
-  const {data:latest}=await sb.from('sales_sku').select('recorded_at').order('recorded_at',{ascending:false}).limit(1);
-  let skuData=null;
-  if(latest&&latest.length>0){
-    const {data}=await sb.from('sales_sku').select('*').eq('recorded_at',latest[0].recorded_at).order('sku_name');
-    skuData=data;
-  }
-  const hasData=skuData&&skuData.length>0;
+  const {data,error}=await sb.from('sku_monthly_hl').select('*').order('year_month',{ascending:false});
+  const hasData=!error&&data&&data.length>0;
   showChartOrEmpty('sku-chart','sku-nodata','sku-wrap',hasData);
-  if(!hasData) return;
+  if(!hasData){console.warn('sku_monthly_hl error:',error);return;}
 
-  const achievements=skuData.map(d=>d.fcst_val>0?((d.mtd_val/d.fcst_val)*100).toFixed(1):0);
-  const colors=achievements.map(a=>a>=80?'rgba(34,197,94,0.8)':a>=60?'rgba(245,158,11,0.8)':'rgba(239,68,68,0.8)');
+  const latestMonth=data[0].year_month;
+  const latest=data.filter(d=>d.year_month===latestMonth);
+  const sorted=[...latest].sort((a,b)=>parseFloat(b.total_hl)-parseFloat(a.total_hl)).slice(0,15);
+  const maxHL=Math.max(...sorted.map(d=>parseFloat(d.total_hl)));
+  const colors=sorted.map(d=>{const r=parseFloat(d.total_hl)/maxHL;return r>=0.6?'rgba(34,197,94,0.8)':r>=0.3?'rgba(245,158,11,0.8)':'rgba(239,68,68,0.8)';});
 
   chartInst.sku=new Chart(document.getElementById('sku-chart').getContext('2d'),{
     type:'bar',
     data:{
-      labels:skuData.map(d=>d.sku_name),
-      datasets:[{
-        label:'달성률 (%)',data:achievements,
-        backgroundColor:colors,borderRadius:4,borderSkipped:false
-      }]
+      labels:sorted.map(d=>d.sku||d.item_name||'N/A'),
+      datasets:[{label:`HL (${latestMonth})`,data:sorted.map(d=>parseFloat(d.total_hl).toFixed(1)),backgroundColor:colors,borderRadius:4,borderSkipped:false}]
     },
     options:{
-      indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{display:false},
-        tooltip:{callbacks:{label:c=>`달성률: ${c.parsed.x}%`}},
-        annotation:{annotations:{line100:{type:'line',xMin:100,xMax:100,borderColor:'rgba(255,255,255,0.3)',borderDash:[4,4]}}}
-      },
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${parseFloat(c.parsed.x).toLocaleString()} HL`}}},
       scales:{
-        x:{min:0,max:130,ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,0.05)'}},
-        y:{ticks:{color:'rgba(255,255,255,0.7)'},grid:{color:'rgba(255,255,255,0.05)'}}
+        x:{ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v.toLocaleString()+' HL'},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{ticks:{color:'rgba(255,255,255,0.7)',font:{size:11}},grid:{color:'rgba(255,255,255,0.05)'}}
       }
     }
   });
@@ -756,34 +759,32 @@ async function loadSkuChart(){
 // ===== REGIONAL CHART =====
 async function loadRegionalChart(){
   destroyChart('regional');
-  const {data,error}=await sb.from('sales_kpi').select('recorded_at,branch,ap,fcst,mtd,ly').order('recorded_at',{ascending:false}).limit(50);
+  const {data,error}=await sb.from('monthly_region_hl').select('*').order('year_month');
   const hasData=!error&&data&&data.length>0;
   showChartOrEmpty('regional-chart','regional-nodata','regional-wrap',hasData);
-  if(!hasData) return;
+  if(!hasData){console.warn('monthly_region_hl error:',error);return;}
 
-  // 지점별 최신 데이터 그룹핑
-  const byBranch={};
-  data.forEach(d=>{ if(!byBranch[d.branch]) byBranch[d.branch]=d; });
-  const branches=Object.keys(byBranch);
-  const palette=['#22c55e','#3b82f6','#f59e0b','#a78bfa','#ef4444'];
+  const months=[...new Set(data.map(d=>d.year_month))].sort();
+  const regionKey=data[0].region!==undefined?'region':'new_sr';
+  const regions=[...new Set(data.map(d=>d[regionKey]))].filter(Boolean);
+  const palette=['#22c55e','#3b82f6','#f59e0b','#a78bfa','#ef4444','#06b6d4','#f97316'];
 
   chartInst.regional=new Chart(document.getElementById('regional-chart').getContext('2d'),{
     type:'bar',
     data:{
-      labels:['AP 목표','FCST','MTD','LY'],
-      datasets:branches.map((b,i)=>({
-        label:b,
-        data:[byBranch[b].ap,byBranch[b].fcst,byBranch[b].mtd,byBranch[b].ly],
-        backgroundColor:palette[i%palette.length]+'cc',
-        borderRadius:4
+      labels:months,
+      datasets:regions.map((region,i)=>({
+        label:region,
+        data:months.map(m=>{const r=data.find(d=>d[regionKey]===region&&d.year_month===m);return r?parseFloat(r.total_hl).toFixed(1):0;}),
+        backgroundColor:palette[i%palette.length]+'cc',borderRadius:3
       }))
     },
     options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y?.toLocaleString()} HL`}}},
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${parseFloat(c.parsed.y).toLocaleString()} HL`}}},
       scales:{
-        x:{ticks:{color:'rgba(255,255,255,0.6)'},grid:{color:'rgba(255,255,255,0.05)'}},
-        y:{ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v.toLocaleString()+' HL'},grid:{color:'rgba(255,255,255,0.05)'}}
+        x:{stacked:true,ticks:{color:'rgba(255,255,255,0.6)',maxTicksLimit:14},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{stacked:true,ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v.toLocaleString()+' HL'},grid:{color:'rgba(255,255,255,0.05)'}}
       }
     }
   });
@@ -792,33 +793,37 @@ async function loadRegionalChart(){
 // ===== DIAGNOSIS CHART =====
 async function loadDiagnosisChart(){
   destroyChart('diagnosis');
-  const {data,error}=await sb.from('sales_kpi').select('recorded_at,ap,mtd,bd_used,bd_total').order('recorded_at');
+  const {data,error}=await sb.from('monthly_region_hl').select('*').order('year_month');
   const hasData=!error&&data&&data.length>0;
   showChartOrEmpty('diagnosis-chart','diagnosis-nodata','diagnosis-wrap',hasData);
-  if(!hasData) return;
+  if(!hasData){console.warn('monthly_region_hl error:',error);return;}
 
-  const labels=data.map(d=>d.recorded_at);
-  const mtdPct=data.map(d=>d.ap?((d.mtd/d.ap)*100).toFixed(1):null);
-  const bdPct=data.map(d=>d.bd_total?((d.bd_used/d.bd_total)*100).toFixed(1):null);
-  const gap=data.map((d,i)=>mtdPct[i]&&bdPct[i]?(mtdPct[i]-bdPct[i]).toFixed(1):null);
+  const months=[...new Set(data.map(d=>d.year_month))].sort();
+  const regionKey=data[0].region!==undefined?'region':'new_sr';
+  const regions=[...new Set(data.map(d=>d[regionKey]))].filter(Boolean);
+  const palette=['#22c55e','#3b82f6','#f59e0b','#a78bfa','#ef4444','#06b6d4','#f97316'];
+
+  const datasets=regions.map((region,i)=>{
+    const isDaejeon=region==='Daejeon'||region==='대전'||region==='Daejeon지점';
+    const color=isDaejeon?'#22c55e':palette[i%palette.length];
+    return {
+      label:region,
+      data:months.map(m=>{const r=data.find(d=>d[regionKey]===region&&d.year_month===m);return r?parseFloat(r.total_hl).toFixed(1):0;}),
+      borderColor:color,backgroundColor:'transparent',
+      borderWidth:isDaejeon?3:1.5,borderDash:isDaejeon?[]:[5,4],
+      tension:0.3,pointRadius:isDaejeon?5:2,pointHoverRadius:isDaejeon?7:4
+    };
+  });
 
   chartInst.diagnosis=new Chart(document.getElementById('diagnosis-chart').getContext('2d'),{
-    type:'bar',
-    data:{
-      labels,
-      datasets:[
-        {type:'line',label:'MTD 달성률',data:mtdPct,borderColor:'#22c55e',backgroundColor:'transparent',tension:0.3,yAxisID:'y'},
-        {type:'line',label:'영업일 경과율',data:bdPct,borderColor:'rgba(255,255,255,0.4)',borderDash:[4,4],tension:0.3,yAxisID:'y'},
-        {label:'Gap (MTD-BD%)',data:gap,backgroundColor:gap.map(g=>g>=0?'rgba(34,197,94,0.5)':'rgba(239,68,68,0.5)'),borderRadius:3,yAxisID:'y2'}
-      ]
-    },
+    type:'line',
+    data:{labels:months,datasets},
     options:{
       responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',boxWidth:12}}},
+      plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${parseFloat(c.parsed.y).toLocaleString()} HL`}}},
       scales:{
-        x:{ticks:{color:'rgba(255,255,255,0.45)',maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.05)'}},
-        y:{position:'left',ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,0.05)'}},
-        y2:{position:'right',ticks:{color:'rgba(255,255,255,0.3)',callback:v=>v+'%'},grid:{display:false}}
+        x:{ticks:{color:'rgba(255,255,255,0.45)',maxTicksLimit:14},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v.toLocaleString()+' HL'},grid:{color:'rgba(255,255,255,0.05)'}}
       }
     }
   });
