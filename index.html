@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Heineken Korea · Sales Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0d0d0f;
+  --panel:rgba(18,18,22,0.82);
+  --panel2:rgba(25,25,30,0.9);
+  --border:rgba(255,255,255,0.08);
+  --border2:rgba(255,255,255,0.14);
+  --text:rgba(255,255,255,0.88);
+  --muted:rgba(255,255,255,0.45);
+  --green:#22c55e;
+  --red:#ef4444;
+  --amber:#f59e0b;
+  --accent:#3b82f6;
+}
+html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;}
+.bg-img{position:fixed;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,0.25) 0%,rgba(0,0,0,0.55) 60%,rgba(0,0,0,0.8) 100%),url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80') center/cover no-repeat;z-index:0;}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;z-index:100;pointer-events:none;}
+#login-screen .ui{position:absolute;inset:0;pointer-events:none;}
+.badge{position:absolute;top:20px;left:24px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.1);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:6px 14px;pointer-events:auto;}
+.badge-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;}
+.badge span{color:rgba(255,255,255,0.9);font-size:12px;letter-spacing:.05em;}
+.wx-panel{position:absolute;top:16px;right:24px;text-align:right;}
+.wx-date{color:var(--muted);font-size:11px;letter-spacing:.08em;margin-bottom:2px;}
+.wx-row{display:flex;align-items:flex-start;justify-content:flex-end;gap:10px;}
+.wx-desc{text-align:right;padding-top:4px;}
+.wx-cond{color:rgba(255,255,255,0.85);font-size:13px;font-weight:300;}
+.wx-sub{color:var(--muted);font-size:10px;letter-spacing:.05em;margin-top:1px;}
+.wx-temp{font-family:'Bebas Neue',cursive;font-size:52px;color:#fff;line-height:1;letter-spacing:-1px;}
+.login-main{position:absolute;bottom:38%;left:48px;pointer-events:auto;}
+.login-title{font-family:'Bebas Neue',cursive;font-size:clamp(64px,8vw,96px);color:#fff;line-height:.9;letter-spacing:2px;animation:fadeUp .8s ease both;}
+.login-sub{color:var(--muted);font-size:11px;letter-spacing:.4em;margin-top:10px;margin-bottom:28px;animation:fadeUp .8s ease .1s both;}
+.login-row{display:flex;animation:fadeUp .8s ease .2s both;}
+.pw-input{background:rgba(255,255,255,0.08);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.2);border-right:none;border-radius:4px 0 0 4px;color:#fff;font-size:14px;padding:10px 16px;width:220px;outline:none;letter-spacing:.15em;transition:.2s;}
+.pw-input::placeholder{color:rgba(255,255,255,0.25);letter-spacing:.3em;}
+.pw-input:focus{background:rgba(255,255,255,0.13);border-color:rgba(255,255,255,.45);}
+.enter-btn{background:rgba(255,255,255,0.15);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.2);border-radius:0 4px 4px 0;color:rgba(255,255,255,.9);font-size:13px;padding:10px 18px;cursor:pointer;transition:.2s;white-space:nowrap;}
+.enter-btn:hover{background:rgba(255,255,255,.25);}
+.err-msg{color:rgba(255,120,120,.9);font-size:11px;margin-top:8px;display:none;}
+.login-clock{position:absolute;bottom:24px;left:28px;font-family:'Bebas Neue',cursive;font-size:clamp(36px,4vw,52px);color:rgba(255,255,255,.9);letter-spacing:3px;}
+.login-loc{position:absolute;bottom:28px;right:28px;text-align:right;}
+.loc-city{color:rgba(255,255,255,.75);font-size:12px;letter-spacing:.35em;}
+.loc-country{color:rgba(255,255,255,.35);font-size:10px;letter-spacing:.4em;margin-top:2px;}
+
+/* MAIN */
+#app{position:fixed;inset:0;z-index:50;display:none;flex-direction:row;}
+#app.visible{display:flex;}
+
+/* SIDEBAR */
+.sidebar{width:180px;min-width:180px;background:rgba(10,10,14,0.9);backdrop-filter:blur(20px);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 0;z-index:10;}
+.sb-logo{padding:12px 16px 20px;border-bottom:1px solid var(--border);margin-bottom:8px;}
+.sb-logo-text{font-family:'Bebas Neue',cursive;font-size:15px;letter-spacing:3px;color:var(--green);}
+.sb-logo-sub{font-size:9px;color:var(--muted);letter-spacing:.15em;margin-top:2px;}
+.sb-section{padding:4px 0;}
+.sb-section-label{font-size:9px;color:var(--muted);letter-spacing:.2em;padding:8px 16px 4px;text-transform:uppercase;}
+.sb-item{display:flex;align-items:center;gap:8px;padding:8px 16px;cursor:pointer;transition:.15s;font-size:12px;color:var(--muted);border-left:2px solid transparent;}
+.sb-item:hover{color:var(--text);background:rgba(255,255,255,.04);}
+.sb-item.active{color:#fff;background:rgba(255,255,255,.07);border-left-color:var(--green);}
+.sb-item .num{font-size:9px;opacity:.5;min-width:14px;}
+.sb-bottom{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border);}
+.sb-user{font-size:11px;color:var(--muted);}
+.sb-user strong{color:var(--text);display:block;font-size:12px;}
+.logout-btn{margin-top:8px;width:100%;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--muted);font-size:10px;padding:5px;cursor:pointer;transition:.15s;font-family:'Noto Sans KR',sans-serif;letter-spacing:.05em;}
+.logout-btn:hover{color:var(--text);border-color:rgba(255,255,255,.3);}
+
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;}
+
+/* TOPBAR */
+.topbar{background:rgba(10,10,14,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.topbar-title{font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:2px;}
+.topbar-title .on-track{color:var(--green);font-size:14px;letter-spacing:1px;margin-left:10px;}
+.topbar-meta{font-size:11px;color:var(--muted);}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.topbar-clock{font-family:'Bebas Neue',cursive;font-size:18px;letter-spacing:2px;color:var(--muted);}
+.edit-btn{background:rgba(255,255,255,.07);border:1px solid var(--border2);border-radius:4px;color:var(--muted);font-size:11px;padding:5px 12px;cursor:pointer;transition:.15s;font-family:'Noto Sans KR',sans-serif;}
+.edit-btn:hover{color:#fff;background:rgba(255,255,255,.12);}
+.upload-btn{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:4px;color:var(--green);font-size:11px;padding:5px 12px;cursor:pointer;transition:.15s;font-family:'Noto Sans KR',sans-serif;}
+.upload-btn:hover{background:rgba(34,197,94,.18);}
+
+/* CONTENT */
+.content{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:0;}
+.content::-webkit-scrollbar{width:4px;}
+.content::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px;}
+
+/* SECTIONS */
+.section{display:none;flex-direction:column;gap:16px;width:100%;}
+.section.active{display:flex;}
+
+/* KPI CARDS */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.kpi-card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:16px 18px;position:relative;overflow:hidden;}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent-color,var(--border2));}
+.kpi-label{font-size:10px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;}
+.kpi-value{font-family:'Bebas Neue',cursive;font-size:32px;letter-spacing:1px;line-height:1;margin-bottom:4px;}
+.kpi-value.green{color:var(--green);}
+.kpi-value.red{color:var(--red);}
+.kpi-value.amber{color:var(--amber);}
+.kpi-sub{font-size:10px;color:var(--muted);margin-bottom:8px;}
+.kpi-badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;}
+.kpi-badge.green{background:rgba(34,197,94,.15);color:var(--green);}
+.kpi-badge.red{background:rgba(239,68,68,.15);color:var(--red);}
+.kpi-badge.amber{background:rgba(245,158,11,.15);color:var(--amber);}
+.kpi-icon{position:absolute;top:14px;right:14px;font-size:18px;opacity:.3;}
+
+/* AI SUMMARY */
+.ai-summary{background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:14px 18px;}
+.ai-summary-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.ai-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);}
+.ai-label{font-size:10px;color:var(--green);letter-spacing:.15em;text-transform:uppercase;}
+.ai-gen-btn{margin-left:auto;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:4px;color:var(--green);font-size:10px;padding:3px 10px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:.15s;}
+.ai-gen-btn:hover{background:rgba(34,197,94,.2);}
+.ai-text{font-size:12px;line-height:1.9;}
+
+/* TWO COLUMN */
+.two-col{display:grid;grid-template-columns:1fr 340px;gap:16px;}
+.summary-panel{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px;}
+.panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.panel-title{font-size:10px;color:var(--green);letter-spacing:.2em;text-transform:uppercase;}
+.tts-controls{display:flex;align-items:center;gap:6px;}
+.tts-btn{background:rgba(255,255,255,.07);border:1px solid var(--border2);border-radius:4px;color:var(--muted);font-size:10px;padding:4px 10px;cursor:pointer;transition:.15s;font-family:'Noto Sans KR',sans-serif;}
+.tts-btn:hover,.tts-btn.active{background:rgba(255,255,255,.12);color:#fff;}
+.summary-content{font-size:12px;line-height:1.9;color:rgba(255,255,255,.75);}
+.summary-content h4{font-size:9px;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin:12px 0 6px;}
+.summary-content p{margin-bottom:6px;}
+
+/* WEATHER */
+.weather-panel{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px;}
+.wx-city{font-size:10px;color:var(--green);letter-spacing:.2em;margin-bottom:12px;}
+.wx-today{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);}
+.wx-today-temp{font-family:'Bebas Neue',cursive;font-size:42px;letter-spacing:-1px;}
+.wx-today-info{text-align:right;}
+.wx-today-cond{font-size:12px;color:var(--text);}
+.wx-today-detail{font-size:10px;color:var(--muted);margin-top:3px;}
+.wx-7day{display:flex;flex-direction:column;gap:6px;}
+.wx-day-row{display:flex;align-items:center;justify-content:space-between;font-size:11px;}
+.wx-day-name{color:var(--muted);width:30px;}
+.wx-day-icon{font-size:14px;}
+.wx-day-hi{color:var(--text);}
+.wx-day-lo{color:var(--muted);font-size:10px;}
+
+.right-col{display:flex;flex-direction:column;gap:12px;}
+.sku-panel{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:18px;}
+.sku-table{width:100%;border-collapse:collapse;font-size:11px;}
+.sku-table th{color:var(--muted);font-weight:400;text-align:left;padding:4px 8px 8px;border-bottom:1px solid var(--border);font-size:9px;letter-spacing:.1em;text-transform:uppercase;}
+.sku-table td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.04);}
+.sku-table tr:last-child td{border-bottom:none;}
+.progress-bar{height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;margin-top:3px;}
+.progress-fill{height:100%;border-radius:2px;transition:.3s;}
+
+/* CHART PANELS */
+.chart-panel{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:20px;}
+.chart-container{position:relative;height:380px;margin-top:12px;}
+.chart-container-sm{position:relative;height:300px;margin-top:12px;}
+.no-data{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:var(--muted);font-size:13px;gap:8px;}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.db-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--green);background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:12px;padding:2px 10px;}
+.db-badge-dot{width:5px;height:5px;border-radius:50%;background:var(--green);}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);z-index:200;display:none;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:#1a1a20;border:1px solid var(--border2);border-radius:12px;padding:28px;width:520px;max-height:80vh;overflow-y:auto;}
+.modal h3{font-size:14px;margin-bottom:20px;letter-spacing:.05em;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-group{display:flex;flex-direction:column;gap:4px;}
+.form-group label{font-size:10px;color:var(--muted);letter-spacing:.1em;}
+.form-group input{background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:4px;color:#fff;font-size:12px;padding:7px 10px;outline:none;font-family:'Noto Sans KR',sans-serif;transition:.2s;}
+.form-group input:focus{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.09);}
+.modal-btns{display:flex;gap:8px;margin-top:20px;justify-content:flex-end;}
+.btn-cancel{background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--muted);font-size:12px;padding:7px 18px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.btn-save{background:var(--green);border:none;border-radius:4px;color:#000;font-size:12px;font-weight:700;padding:7px 18px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+
+/* TOAST */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#0f172a;border:1px solid var(--green);color:#fff;padding:10px 22px;border-radius:8px;font-size:13px;z-index:9999;pointer-events:none;animation:fadeUp .3s ease;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateX(-50%) translateY(12px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+@keyframes spin{to{transform:rotate(360deg);}}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid rgba(34,197,94,.3);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+</style>
+</head>
+<body>
+<div class="bg-img"></div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="ui">
+    <div class="badge"><div class="badge-dot"></div><span>Heineken Korea · Daejeon Branch</span></div>
+    <div class="wx-panel">
+      <div class="wx-date" id="l-date">--</div>
+      <div class="wx-row">
+        <div class="wx-desc">
+          <div class="wx-cond" id="l-cond">로딩중</div>
+          <div class="wx-sub" id="l-sub">--</div>
+        </div>
+        <div class="wx-temp" id="l-temp">--°</div>
+      </div>
+    </div>
+    <div class="login-main">
+      <div class="login-title">Dashboard</div>
+      <div class="login-sub">HEINEKEN KOREA · SALES</div>
+      <div class="login-row">
+        <input class="pw-input" id="pw" type="password" placeholder="············" autocomplete="off"/>
+        <button class="enter-btn" onclick="tryLogin()">Enter →</button>
+      </div>
+      <div class="err-msg" id="err">⚠ 비밀번호가 틀렸습니다</div>
+    </div>
+    <div class="login-clock" id="l-clock">00:00:00</div>
+    <div class="login-loc"><div class="loc-city">DAEJEON</div><div class="loc-country">KOREA</div></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-text">HEINEKEN</div>
+      <div class="sb-logo-sub">KOREA · DAEJEON</div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-section-label">메뉴</div>
+      <div class="sb-item active" onclick="setNav(this,'overview')"><span class="num">01</span> Overview</div>
+      <div class="sb-item" onclick="setNav(this,'trend')"><span class="num">02</span> Trend</div>
+      <div class="sb-item" onclick="setNav(this,'regional')"><span class="num">03</span> Regional</div>
+      <div class="sb-item" onclick="setNav(this,'diagnosis')"><span class="num">04</span> Diagnosis</div>
+      <div class="sb-item" onclick="setNav(this,'sku')"><span class="num">05</span> SKU</div>
+    </div>
+    <div class="sb-section" style="margin-top:8px;">
+      <div class="sb-section-label">관리</div>
+      <div class="sb-item" onclick="alert('준비중')"><span class="num">—</span> 거래처</div>
+      <div class="sb-item" onclick="alert('준비중')"><span class="num">—</span> 직원 리뷰</div>
+    </div>
+    <div class="sb-bottom">
+      <div class="sb-user"><strong id="sb-name">홍성종 지점장</strong>대전지점</div>
+      <button class="logout-btn" onclick="logout()">← 로그아웃</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title">MAY FCST <span id="tb-fcst">4,576</span> HL <span class="on-track" id="tb-track">● ON TRACK</span></div>
+        <div class="topbar-meta" id="tb-meta">KEY PERFORMANCE INDICATORS · 대전지점</div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-clock" id="d-clock">--:--:--</div>
+        <input type="file" id="excelInput" accept=".xlsx,.xls" style="display:none" onchange="handleExcelUpload(event)">
+        <button class="upload-btn" onclick="document.getElementById('excelInput').click()">📂 EXCEL 업로드</button>
+        <button class="edit-btn" onclick="openEdit()">✏ 데이터 입력</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ① OVERVIEW -->
+      <div id="sec-overview" class="section active">
+        <div class="kpi-row">
+          <div class="kpi-card" style="--accent-color:#3b82f6;">
+            <div class="kpi-label">MAY AP 목표 <span class="kpi-icon">🎯</span></div>
+            <div class="kpi-value" id="k-ap">4,521.1 HL</div>
+            <div class="kpi-sub">On Trade TTL</div>
+            <span class="kpi-badge green" id="k-ap-b">AP 달성중</span>
+          </div>
+          <div class="kpi-card" style="--accent-color:#22c55e;">
+            <div class="kpi-label">THIS WK FCST 달성률 <span class="kpi-icon">📈</span></div>
+            <div class="kpi-value green" id="k-wk">101.2%</div>
+            <div class="kpi-sub" id="k-wk-sub">FCST 4,576 HL</div>
+            <span class="kpi-badge green" id="k-wk-b">101.2%</span>
+          </div>
+          <div class="kpi-card" style="--accent-color:#f59e0b;">
+            <div class="kpi-label">MTD 실적 달성률 <span class="kpi-icon">📊</span></div>
+            <div class="kpi-value amber" id="k-mtd">62.7%</div>
+            <div class="kpi-sub" id="k-mtd-sub">MTD 2,868.4 HL</div>
+            <span class="kpi-badge amber" id="k-mtd-b">62.7%</span>
+          </div>
+          <div class="kpi-card" style="--accent-color:#22c55e;">
+            <div class="kpi-label">전년 동월 대비 성장률 <span class="kpi-icon">🚀</span></div>
+            <div class="kpi-value green" id="k-yoy">+7.4%</div>
+            <div class="kpi-sub" id="k-yoy-sub">LY 4,260.2 HL</div>
+            <span class="kpi-badge green" id="k-yoy-b">100.0%</span>
+          </div>
+        </div>
+        <div class="ai-summary">
+          <div class="ai-summary-header">
+            <div class="ai-dot"></div>
+            <div class="ai-label">AI 분석 요약</div>
+            <button class="ai-gen-btn" onclick="genAISummary()">✨ 재생성</button>
+          </div>
+          <div class="ai-text" id="ai-text">📋 총 영업일 21일 중 13일 경과 (62%). ✅ May AP 목표 초과 달성 예상. This Wk FCST <strong>4,576 HL</strong> vs AP(4,521 HL) <strong>101.2%</strong>로 목표 초과 달성 중. 전년 동월(4,260.2 HL) 대비 <strong style="color:var(--green)">+7.4%</strong> YoY 성장 모멘텀 지속.</div>
+        </div>
+        <div class="two-col">
+          <div class="summary-panel">
+            <div class="panel-header">
+              <div class="panel-title">MONTHLY SUMMARY</div>
+              <div class="tts-controls">
+                <button class="tts-btn" id="tts-play" onclick="ttsPlay()">▶ Read Aloud</button>
+                <button class="tts-btn" onclick="ttsPause()">⏸ Pause</button>
+                <button class="tts-btn" onclick="ttsStop()">⏹ Stop</button>
+              </div>
+            </div>
+            <div class="summary-content" id="summary-content">
+              <p>For May, with 61.9 percent of working days elapsed, month-to-date attainment stands at 63.4 percent — ahead of pace by 1.5 points. The latest rolling forecast overshoots the annual plan at 101.2 percent.</p>
+              <p>Year over year, the month-end forecast is trending up 7.4 percent.</p>
+              <h4>TOP SKUS THIS MONTH</h4>
+              <p>Heineken 20L Air Keg: 67.7% · 33cl Bottle: 59.6% · 33cl Can: 84.7% · 8L Blade: 41.5% · Paulaner 20L: 68.2%</p>
+            </div>
+          </div>
+          <div class="right-col">
+            <div class="weather-panel">
+              <div class="wx-city">DAEJEON · 7-DAY</div>
+              <div class="wx-today">
+                <div>
+                  <div class="wx-today-temp" id="wx-temp-big">--°</div>
+                  <div style="font-size:10px;color:var(--muted)">Today</div>
+                </div>
+                <div class="wx-today-info">
+                  <div class="wx-today-cond" id="wx-cond-big">--</div>
+                  <div class="wx-today-detail" id="wx-detail-big">--</div>
+                </div>
+              </div>
+              <div class="wx-7day" id="wx-7day"><div style="color:var(--muted);font-size:11px;">날씨 로딩중...</div></div>
+            </div>
+            <div class="sku-panel">
+              <div class="panel-header"><div class="panel-title">SKU PERFORMANCE</div></div>
+              <table class="sku-table">
+                <thead><tr><th>SKU</th><th style="text-align:right">달성률</th></tr></thead>
+                <tbody id="sku-tbody">
+                  <tr><td>20L Air Keg<div class="progress-bar"><div class="progress-fill" style="width:67.7%;background:var(--green)"></div></div></td><td style="text-align:right;color:var(--green)">67.7%</td></tr>
+                  <tr><td>33cl Bottle<div class="progress-bar"><div class="progress-fill" style="width:59.6%;background:var(--amber)"></div></div></td><td style="text-align:right;color:var(--amber)">59.6%</td></tr>
+                  <tr><td>33cl Can<div class="progress-bar"><div class="progress-fill" style="width:84.7%;background:var(--green)"></div></div></td><td style="text-align:right;color:var(--green)">84.7%</td></tr>
+                  <tr><td>8L Blade<div class="progress-bar"><div class="progress-fill" style="width:41.5%;background:var(--red)"></div></div></td><td style="text-align:right;color:var(--red)">41.5%</td></tr>
+                  <tr><td>Paulaner 20L<div class="progress-bar"><div class="progress-fill" style="width:68.2%;background:var(--green)"></div></div></td><td style="text-align:right;color:var(--green)">68.2%</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ② TREND -->
+      <div id="sec-trend" class="section">
+        <div class="chart-panel">
+          <div class="panel-header">
+            <div class="panel-title">MONTHLY TREND · FCST vs AP vs LY</div>
+            <span class="db-badge"><span class="db-badge-dot"></span>Supabase DB</span>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">엑셀 업로드 이력 기반 추세 차트 · HL 단위</div>
+          <div class="chart-container" id="trend-wrap">
+            <canvas id="trend-chart"></canvas>
+          </div>
+          <div class="no-data" id="trend-nodata" style="display:none;">
+            <span style="font-size:28px;">📊</span>
+            엑셀을 업로드하면 추세 차트가 표시됩니다
+          </div>
+        </div>
+        <div class="chart-panel">
+          <div class="panel-header">
+            <div class="panel-title">MTD 달성률 추이 (%)</div>
+          </div>
+          <div class="chart-container-sm" id="mtd-wrap">
+            <canvas id="mtd-chart"></canvas>
+          </div>
+          <div class="no-data" id="mtd-nodata" style="display:none;">
+            <span style="font-size:28px;">📈</span>
+            데이터 없음
+          </div>
+        </div>
+      </div>
+
+      <!-- ③ REGIONAL -->
+      <div id="sec-regional" class="section">
+        <div class="chart-panel">
+          <div class="panel-header">
+            <div class="panel-title">REGIONAL · KPI 현황</div>
+            <span class="db-badge"><span class="db-badge-dot"></span>Supabase DB</span>
+          </div>
+          <div class="chart-container" id="regional-wrap">
+            <canvas id="regional-chart"></canvas>
+          </div>
+          <div class="no-data" id="regional-nodata" style="display:none;">
+            <span style="font-size:28px;">🗺️</span>
+            엑셀을 업로드하면 지역별 차트가 표시됩니다
+          </div>
+        </div>
+      </div>
+
+      <!-- ④ DIAGNOSIS -->
+      <div id="sec-diagnosis" class="section">
+        <div class="chart-panel">
+          <div class="panel-header"><div class="panel-title">DIAGNOSIS · 영업일 대비 달성 진단</div></div>
+          <div class="chart-container" id="diagnosis-wrap">
+            <canvas id="diagnosis-chart"></canvas>
+          </div>
+          <div class="no-data" id="diagnosis-nodata" style="display:none;">
+            <span style="font-size:28px;">🔍</span>
+            데이터를 업로드하면 진단 차트가 표시됩니다
+          </div>
+        </div>
+      </div>
+
+      <!-- ⑤ SKU -->
+      <div id="sec-sku" class="section">
+        <div class="chart-panel">
+          <div class="panel-header">
+            <div class="panel-title">SKU PERFORMANCE · 달성률 차트</div>
+            <span class="db-badge"><span class="db-badge-dot"></span>Supabase DB</span>
+          </div>
+          <div class="chart-container" id="sku-wrap">
+            <canvas id="sku-chart"></canvas>
+          </div>
+          <div class="no-data" id="sku-nodata" style="display:none;">
+            <span style="font-size:28px;">🍺</span>
+            SKU 시트가 포함된 엑셀을 업로드해주세요
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3>📊 KPI 데이터 입력</h3>
+    <div class="form-grid">
+      <div class="form-group"><label>MAY AP 목표 (HL)</label><input id="f-ap" type="number" value="4521.1" step="0.1"/></div>
+      <div class="form-group"><label>MAY FCST (HL)</label><input id="f-fcst" type="number" value="4576" step="0.1"/></div>
+      <div class="form-group"><label>MTD 실적 (HL)</label><input id="f-mtd" type="number" value="2868.4" step="0.1"/></div>
+      <div class="form-group"><label>LY 동월 실적 (HL)</label><input id="f-ly" type="number" value="4260.2" step="0.1"/></div>
+      <div class="form-group"><label>영업일 경과 (일)</label><input id="f-bd-used" type="number" value="13"/></div>
+      <div class="form-group"><label>영업일 합계 (일)</label><input id="f-bd-total" type="number" value="21"/></div>
+      <div class="form-group"><label>지점명</label><input id="f-branch" type="text" value="대전지점"/></div>
+      <div class="form-group"><label>담당자</label><input id="f-name" type="text" value="홍성종 지점장"/></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeEdit()">취소</button>
+      <button class="btn-save" onclick="saveData()">저장 & 업데이트</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== SUPABASE =====
+const SUPABASE_URL = 'https://ebjkssirfkfgriyhvorc.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViamtzc2lyZmtmZ3JpeWh2b3JjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0OTM1NTQsImV4cCI6MjA5NTA2OTU1NH0.CYCsyVPAja-atYyw94fdL3nckh2pMpOxiT1cKgHCppQ';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ===== CHART.JS 기본 설정 (다크 테마) =====
+Chart.defaults.color = 'rgba(255,255,255,0.5)';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+
+// ===== STATE =====
+const PW = '1234';
+let D = {ap:4521.1,fcst:4576,mtd:2868.4,ly:4260.2,bdUsed:13,bdTotal:21,branch:'대전지점',name:'홍성종 지점장'};
+let ttsUtter = null;
+let chartInst = {};
+
+// ===== LOGIN =====
+function tryLogin(){
+  if(document.getElementById('pw').value === PW){
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').classList.add('visible');
+    fetchWeatherDash();
+  } else {
+    document.getElementById('err').style.display='block';
+    document.getElementById('pw').value='';
+    document.getElementById('pw').focus();
+  }
+}
+document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')tryLogin();});
+function logout(){
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').style.display='';
+  document.getElementById('pw').value='';
+}
+
+// ===== CLOCK =====
+function tick(){
+  const n=new Date();
+  document.getElementById('l-clock').textContent=n.toTimeString().slice(0,8);
+  const dc=document.getElementById('d-clock');
+  if(dc) dc.textContent=n.toTimeString().slice(0,8);
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('l-date').textContent=`${days[n.getDay()]}, ${months[n.getMonth()]} ${n.getDate()} ${n.getFullYear()}`;
+}
+tick(); setInterval(tick,1000);
+
+// ===== WEATHER =====
+const WX_CODES={0:'맑음',1:'대체로 맑음',2:'구름 조금',3:'흐림',45:'안개',48:'안개',51:'이슬비',53:'이슬비',55:'이슬비',61:'비',63:'비',65:'강한 비',71:'눈',73:'눈',75:'강한 눈',80:'소나기',81:'소나기',82:'강한 소나기',95:'뇌우',96:'우박',99:'우박'};
+const WX_ICONS={0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌧️',61:'🌧️',63:'🌧️',65:'🌧️',71:'❄️',73:'❄️',75:'❄️',80:'🌦️',81:'🌦️',82:'⛈️',95:'⛈️',96:'⛈️',99:'⛈️'};
+async function fetchWeatherLogin(){
+  try{
+    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=36.35&longitude=127.38&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&wind_speed_unit=kmh&timezone=Asia%2FSeoul&forecast_days=7');
+    const d=await r.json(); const c=d.current;
+    document.getElementById('l-temp').textContent=Math.round(c.temperature_2m)+'°';
+    document.getElementById('l-cond').textContent=WX_CODES[c.weather_code]||'--';
+    document.getElementById('l-sub').textContent=`체감 ${Math.round(c.apparent_temperature)}° · 습도 ${c.relative_humidity_2m}% · 바람 ${Math.round(c.wind_speed_10m)}km/h`;
+    window._wxData=d;
+  }catch(e){document.getElementById('l-cond').textContent='날씨 오류';}
+}
+fetchWeatherLogin();
+function fetchWeatherDash(){ window._wxData ? renderDashWeather(window._wxData) : fetchWeatherDashAPI(); }
+async function fetchWeatherDashAPI(){
+  try{ const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=36.35&longitude=127.38&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&wind_speed_unit=kmh&timezone=Asia%2FSeoul&forecast_days=7'); renderDashWeather(await r.json()); }catch(e){}
+}
+function renderDashWeather(d){
+  const c=d.current;
+  document.getElementById('wx-temp-big').textContent=Math.round(c.temperature_2m)+'°';
+  document.getElementById('wx-cond-big').textContent=WX_CODES[c.weather_code]||'--';
+  document.getElementById('wx-detail-big').textContent=`체감 ${Math.round(c.apparent_temperature)}° · 습도 ${c.relative_humidity_2m}% · 바람 ${Math.round(c.wind_speed_10m)}km/h`;
+  const days=['일','월','화','수','목','금','토']; const dd=d.daily; let html='';
+  for(let i=0;i<7;i++){
+    const dt=new Date(dd.time[i]);
+    html+=`<div class="wx-day-row"><span class="wx-day-name">${i===0?'Today':days[dt.getDay()]}</span><span>${WX_ICONS[dd.weather_code[i]]||'🌡️'}</span><span><span class="wx-day-hi">${Math.round(dd.temperature_2m_max[i])}°</span> <span class="wx-day-lo">${Math.round(dd.temperature_2m_min[i])}°</span></span></div>`;
+  }
+  document.getElementById('wx-7day').innerHTML=html;
+}
+
+// ===== NAVIGATION =====
+function setNav(el, id){
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  if(id==='trend') loadTrendCharts();
+  if(id==='sku') loadSkuChart();
+  if(id==='regional') loadRegionalChart();
+  if(id==='diagnosis') loadDiagnosisChart();
+}
+
+// ===== EDIT MODAL =====
+function openEdit(){document.getElementById('modal').classList.add('open');}
+function closeEdit(){document.getElementById('modal').classList.remove('open');}
+function saveData(){
+  D.ap=parseFloat(document.getElementById('f-ap').value)||D.ap;
+  D.fcst=parseFloat(document.getElementById('f-fcst').value)||D.fcst;
+  D.mtd=parseFloat(document.getElementById('f-mtd').value)||D.mtd;
+  D.ly=parseFloat(document.getElementById('f-ly').value)||D.ly;
+  D.bdUsed=parseInt(document.getElementById('f-bd-used').value)||D.bdUsed;
+  D.bdTotal=parseInt(document.getElementById('f-bd-total').value)||D.bdTotal;
+  D.branch=document.getElementById('f-branch').value||D.branch;
+  D.name=document.getElementById('f-name').value||D.name;
+  renderKPI(); closeEdit();
+}
+
+// ===== EXCEL UPLOAD → SUPABASE =====
+function formatDate(val){
+  if(!val) return null;
+  if(val instanceof Date) return val.toISOString().slice(0,10);
+  if(typeof val==='number'){
+    const d=new Date(Math.round((val-25569)*86400*1000));
+    return d.toISOString().slice(0,10);
+  }
+  const s=String(val).trim();
+  // YYYY-MM-DD or YYYY/MM/DD or DD/MM/YYYY 처리
+  if(/^\d{4}[-/]\d{2}[-/]\d{2}/.test(s)) return s.replace(/\//g,'-').slice(0,10);
+  return s.slice(0,10);
+}
+
+async function handleExcelUpload(e){
+  const file=e.target.files[0]; if(!file) return;
+  showToast('⏳ 처리 중...');
+  const reader=new FileReader();
+  reader.onload=async function(ev){
+    try{
+      const wb=XLSX.read(ev.target.result,{type:'array',cellDates:true});
+
+      // ── Sheet 1: KPI 데이터 ──
+      // 헤더: 날짜 | AP목표 | FCST | MTD | LY | 영업일수사용 | 영업일수전체 | 지점명
+      const kpiRows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+      const kpiHeaders=kpiRows[0].map(h=>String(h).trim());
+      const kpiInsert=[];
+
+      for(let i=1;i<kpiRows.length;i++){
+        const row=kpiRows[i]; if(!row[0]) continue;
+        const o={};
+        kpiHeaders.forEach((h,j)=>{ o[h]=row[j]; });
+        const rec={
+          recorded_at: formatDate(o['날짜']),
+          branch: String(o['지점명']||D.branch),
+          ap: parseFloat(o['AP목표'])||null,
+          fcst: parseFloat(o['FCST'])||null,
+          mtd: parseFloat(o['MTD'])||null,
+          ly: parseFloat(o['LY'])||null,
+          bd_used: parseInt(o['영업일수사용'])||null,
+          bd_total: parseInt(o['영업일수전체'])||null
+        };
+        if(rec.recorded_at) kpiInsert.push(rec);
+        // 마지막 행으로 현재 D 업데이트
+        if(i===kpiRows.length-1 || !kpiRows[i+1] || !kpiRows[i+1][0]){
+          if(rec.ap) D.ap=rec.ap;
+          if(rec.fcst) D.fcst=rec.fcst;
+          if(rec.mtd) D.mtd=rec.mtd;
+          if(rec.ly) D.ly=rec.ly;
+          if(rec.bd_used) D.bdUsed=rec.bd_used;
+          if(rec.bd_total) D.bdTotal=rec.bd_total;
+          if(rec.branch) D.branch=rec.branch;
+        }
+      }
+
+      // ── Sheet 2: SKU 데이터 (선택) ──
+      // 헤더: 날짜 | 지점명 | SKU명 | FCST | MTD
+      const skuInsert=[];
+      if(wb.SheetNames.length>1){
+        const skuRows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[1]],{header:1,defval:''});
+        const skuHeaders=skuRows[0].map(h=>String(h).trim());
+        for(let i=1;i<skuRows.length;i++){
+          const row=skuRows[i]; if(!row[0]) continue;
+          const o={}; skuHeaders.forEach((h,j)=>{ o[h]=row[j]; });
+          const rec={
+            recorded_at: formatDate(o['날짜']),
+            branch: String(o['지점명']||D.branch),
+            sku_name: String(o['SKU명']||''),
+            fcst_val: parseFloat(o['FCST'])||null,
+            mtd_val: parseFloat(o['MTD'])||null
+          };
+          if(rec.recorded_at&&rec.sku_name) skuInsert.push(rec);
+        }
+      }
+
+      // ── Supabase 저장 ──
+      let saved=0;
+      if(kpiInsert.length>0){
+        const {error}=await sb.from('sales_kpi').insert(kpiInsert);
+        if(!error) saved+=kpiInsert.length;
+        else console.error('KPI insert error:',error.message);
+      }
+      if(skuInsert.length>0){
+        const {error}=await sb.from('sales_sku').insert(skuInsert);
+        if(!error) saved+=skuInsert.length;
+        else console.error('SKU insert error:',error.message);
+      }
+
+      renderKPI();
+      showToast(`✅ ${saved}건 DB 저장 완료 · KPI 업데이트`);
+    }catch(err){
+      showToast('❌ 파일 오류: '+err.message);
+      console.error(err);
+    }
+    e.target.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ===== CHART HELPERS =====
+function destroyChart(id){ if(chartInst[id]){ chartInst[id].destroy(); delete chartInst[id]; } }
+function showChartOrEmpty(canvasId, nodataId, wrapId, hasData){
+  document.getElementById(canvasId).style.display = hasData?'block':'none';
+  document.getElementById(nodataId).style.display = hasData?'none':'flex';
+}
+
+// ===== TREND CHARTS =====
+async function loadTrendCharts(){
+  destroyChart('trend'); destroyChart('mtd');
+  const {data,error}=await sb.from('sales_kpi').select('recorded_at,ap,fcst,mtd,ly,bd_used,bd_total').order('recorded_at');
+  const hasData=!error&&data&&data.length>0;
+  showChartOrEmpty('trend-chart','trend-nodata','trend-wrap',hasData);
+  showChartOrEmpty('mtd-chart','mtd-nodata','mtd-wrap',hasData);
+  if(!hasData) return;
+
+  const labels=data.map(d=>d.recorded_at);
+  const commonOpts={
+    responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',boxWidth:12}}},
+    scales:{
+      x:{ticks:{color:'rgba(255,255,255,0.45)',maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.05)'}},
+      y:{ticks:{color:'rgba(255,255,255,0.45)'},grid:{color:'rgba(255,255,255,0.05)'}}
+    }
+  };
+
+  // HL 추세 라인 차트
+  chartInst.trend=new Chart(document.getElementById('trend-chart').getContext('2d'),{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'FCST (HL)',data:data.map(d=>d.fcst),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.08)',fill:true,tension:0.3,pointRadius:3},
+        {label:'AP 목표',data:data.map(d=>d.ap),borderColor:'#3b82f6',backgroundColor:'transparent',borderDash:[6,4],tension:0.3,pointRadius:2},
+        {label:'LY 실적',data:data.map(d=>d.ly),borderColor:'#f59e0b',backgroundColor:'transparent',borderDash:[3,3],tension:0.3,pointRadius:2}
+      ]
+    },
+    options:{...commonOpts, plugins:{...commonOpts.plugins, tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y?.toLocaleString()} HL`}}}}
+  });
+
+  // MTD 달성률 라인 차트
+  const mtdPct=data.map(d=>d.ap?((d.mtd/d.ap)*100).toFixed(1):null);
+  const bdPct=data.map(d=>d.bd_total?((d.bd_used/d.bd_total)*100).toFixed(1):null);
+  chartInst.mtd=new Chart(document.getElementById('mtd-chart').getContext('2d'),{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'MTD 달성률 (%)',data:mtdPct,borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,0.08)',fill:true,tension:0.3,pointRadius:3},
+        {label:'영업일 경과율 (%)',data:bdPct,borderColor:'rgba(255,255,255,0.3)',backgroundColor:'transparent',borderDash:[4,4],tension:0.3,pointRadius:2}
+      ]
+    },
+    options:{...commonOpts, scales:{...commonOpts.scales, y:{...commonOpts.scales.y, ticks:{...commonOpts.scales.y.ticks,callback:v=>v+'%'}}}}
+  });
+}
+
+// ===== SKU CHART =====
+async function loadSkuChart(){
+  destroyChart('sku');
+  // 가장 최근 날짜의 SKU 데이터 조회
+  const {data:latest}=await sb.from('sales_sku').select('recorded_at').order('recorded_at',{ascending:false}).limit(1);
+  let skuData=null;
+  if(latest&&latest.length>0){
+    const {data}=await sb.from('sales_sku').select('*').eq('recorded_at',latest[0].recorded_at).order('sku_name');
+    skuData=data;
+  }
+  const hasData=skuData&&skuData.length>0;
+  showChartOrEmpty('sku-chart','sku-nodata','sku-wrap',hasData);
+  if(!hasData) return;
+
+  const achievements=skuData.map(d=>d.fcst_val>0?((d.mtd_val/d.fcst_val)*100).toFixed(1):0);
+  const colors=achievements.map(a=>a>=80?'rgba(34,197,94,0.8)':a>=60?'rgba(245,158,11,0.8)':'rgba(239,68,68,0.8)');
+
+  chartInst.sku=new Chart(document.getElementById('sku-chart').getContext('2d'),{
+    type:'bar',
+    data:{
+      labels:skuData.map(d=>d.sku_name),
+      datasets:[{
+        label:'달성률 (%)',data:achievements,
+        backgroundColor:colors,borderRadius:4,borderSkipped:false
+      }]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>`달성률: ${c.parsed.x}%`}},
+        annotation:{annotations:{line100:{type:'line',xMin:100,xMax:100,borderColor:'rgba(255,255,255,0.3)',borderDash:[4,4]}}}
+      },
+      scales:{
+        x:{min:0,max:130,ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{ticks:{color:'rgba(255,255,255,0.7)'},grid:{color:'rgba(255,255,255,0.05)'}}
+      }
+    }
+  });
+}
+
+// ===== REGIONAL CHART =====
+async function loadRegionalChart(){
+  destroyChart('regional');
+  const {data,error}=await sb.from('sales_kpi').select('recorded_at,branch,ap,fcst,mtd,ly').order('recorded_at',{ascending:false}).limit(50);
+  const hasData=!error&&data&&data.length>0;
+  showChartOrEmpty('regional-chart','regional-nodata','regional-wrap',hasData);
+  if(!hasData) return;
+
+  // 지점별 최신 데이터 그룹핑
+  const byBranch={};
+  data.forEach(d=>{ if(!byBranch[d.branch]) byBranch[d.branch]=d; });
+  const branches=Object.keys(byBranch);
+  const palette=['#22c55e','#3b82f6','#f59e0b','#a78bfa','#ef4444'];
+
+  chartInst.regional=new Chart(document.getElementById('regional-chart').getContext('2d'),{
+    type:'bar',
+    data:{
+      labels:['AP 목표','FCST','MTD','LY'],
+      datasets:branches.map((b,i)=>({
+        label:b,
+        data:[byBranch[b].ap,byBranch[b].fcst,byBranch[b].mtd,byBranch[b].ly],
+        backgroundColor:palette[i%palette.length]+'cc',
+        borderRadius:4
+      }))
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y?.toLocaleString()} HL`}}},
+      scales:{
+        x:{ticks:{color:'rgba(255,255,255,0.6)'},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v.toLocaleString()+' HL'},grid:{color:'rgba(255,255,255,0.05)'}}
+      }
+    }
+  });
+}
+
+// ===== DIAGNOSIS CHART =====
+async function loadDiagnosisChart(){
+  destroyChart('diagnosis');
+  const {data,error}=await sb.from('sales_kpi').select('recorded_at,ap,mtd,bd_used,bd_total').order('recorded_at');
+  const hasData=!error&&data&&data.length>0;
+  showChartOrEmpty('diagnosis-chart','diagnosis-nodata','diagnosis-wrap',hasData);
+  if(!hasData) return;
+
+  const labels=data.map(d=>d.recorded_at);
+  const mtdPct=data.map(d=>d.ap?((d.mtd/d.ap)*100).toFixed(1):null);
+  const bdPct=data.map(d=>d.bd_total?((d.bd_used/d.bd_total)*100).toFixed(1):null);
+  const gap=data.map((d,i)=>mtdPct[i]&&bdPct[i]?(mtdPct[i]-bdPct[i]).toFixed(1):null);
+
+  chartInst.diagnosis=new Chart(document.getElementById('diagnosis-chart').getContext('2d'),{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {type:'line',label:'MTD 달성률',data:mtdPct,borderColor:'#22c55e',backgroundColor:'transparent',tension:0.3,yAxisID:'y'},
+        {type:'line',label:'영업일 경과율',data:bdPct,borderColor:'rgba(255,255,255,0.4)',borderDash:[4,4],tension:0.3,yAxisID:'y'},
+        {label:'Gap (MTD-BD%)',data:gap,backgroundColor:gap.map(g=>g>=0?'rgba(34,197,94,0.5)':'rgba(239,68,68,0.5)'),borderRadius:3,yAxisID:'y2'}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',boxWidth:12}}},
+      scales:{
+        x:{ticks:{color:'rgba(255,255,255,0.45)',maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{position:'left',ticks:{color:'rgba(255,255,255,0.45)',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,0.05)'}},
+        y2:{position:'right',ticks:{color:'rgba(255,255,255,0.3)',callback:v=>v+'%'},grid:{display:false}}
+      }
+    }
+  });
+}
+
+// ===== RENDER KPI =====
+function renderKPI(){
+  const wkAch=((D.fcst/D.ap)*100).toFixed(1);
+  const bdPct=((D.bdUsed/D.bdTotal)*100).toFixed(1);
+  const mtdAch=((D.mtd/D.ap)*100).toFixed(1);
+  const yoy=(((D.fcst-D.ly)/D.ly)*100).toFixed(1);
+  const yoyLy=((D.fcst/D.ly)*100).toFixed(1);
+
+  document.getElementById('k-ap').textContent=D.ap.toLocaleString()+' HL';
+  document.getElementById('tb-fcst').textContent=D.fcst.toLocaleString();
+
+  const wkEl=document.getElementById('k-wk');
+  wkEl.textContent=wkAch+'%'; wkEl.className='kpi-value '+(wkAch>=100?'green':'red');
+  document.getElementById('k-wk-sub').textContent=`FCST ${D.fcst.toLocaleString()} HL`;
+  document.getElementById('k-wk-b').textContent=wkAch+'%';
+  document.getElementById('k-wk-b').className='kpi-badge '+(wkAch>=100?'green':'red');
+
+  const mtdEl=document.getElementById('k-mtd');
+  const mtdColor=parseFloat(mtdAch)>=(parseFloat(bdPct)-3)?'amber':'red';
+  mtdEl.textContent=mtdAch+'%'; mtdEl.className='kpi-value '+mtdColor;
+  document.getElementById('k-mtd-sub').textContent=`MTD ${D.mtd.toLocaleString()} HL`;
+  document.getElementById('k-mtd-b').textContent=mtdAch+'%';
+  document.getElementById('k-mtd-b').className='kpi-badge '+mtdColor;
+
+  const yoyEl=document.getElementById('k-yoy');
+  yoyEl.textContent=(yoy>=0?'+':'')+yoy+'%'; yoyEl.className='kpi-value '+(yoy>=0?'green':'red');
+  document.getElementById('k-yoy-sub').textContent=`LY ${D.ly.toLocaleString()} HL`;
+  document.getElementById('k-yoy-b').textContent=yoyLy+'%';
+
+  const trackEl=document.getElementById('tb-track');
+  trackEl.textContent=parseFloat(wkAch)>=100?'● ON TRACK':'● AT RISK';
+  trackEl.style.color=parseFloat(wkAch)>=100?'var(--green)':'var(--red)';
+
+  document.getElementById('sb-name').textContent=D.name;
+  document.getElementById('tb-meta').textContent=`KEY PERFORMANCE INDICATORS · ${D.branch}`;
+}
+
+// ===== AI SUMMARY =====
+async function genAISummary(){
+  const el=document.getElementById('ai-text');
+  const btn=document.querySelector('.ai-gen-btn');
+  btn.textContent='생성중...'; btn.disabled=true;
+  el.innerHTML='<span class="spinner"></span> AI 분석 중...';
+  const wkAch=((D.fcst/D.ap)*100).toFixed(1);
+  const mtdAch=((D.mtd/D.ap)*100).toFixed(1);
+  const yoy=(((D.fcst-D.ly)/D.ly)*100).toFixed(1);
+  const bdPct=((D.bdUsed/D.bdTotal)*100).toFixed(1);
+  const prompt=`하이네켄 코리아 ${D.branch} 월간 KPI 데이터를 분석하고 한국어 비즈니스 요약을 2-3문장으로 작성해주세요.\n데이터: AP목표 ${D.ap}HL, 이번주FCST ${D.fcst}HL(${wkAch}%), MTD실적 ${D.mtd}HL(${mtdAch}%), 전년대비 ${yoy}%, 영업일경과 ${D.bdUsed}/${D.bdTotal}일(${bdPct}%).\n💡이모지 1개 포함, 핵심수치 강조, 간결하게 작성.`;
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:prompt}]})});
+    const data=await resp.json();
+    el.innerHTML=data.content?.[0]?.text||'AI 요약을 생성할 수 없습니다.';
+  }catch(e){ el.innerHTML='⚠ AI 요약 생성 실패.'; }
+  btn.textContent='✨ 재생성'; btn.disabled=false;
+}
+
+// ===== TTS =====
+function ttsPlay(){
+  if(!window.speechSynthesis) return;
+  const text=document.getElementById('summary-content').innerText;
+  if(window.speechSynthesis.paused){ window.speechSynthesis.resume(); return; }
+  ttsStop();
+  ttsUtter=new SpeechSynthesisUtterance(text);
+  ttsUtter.lang='en-US'; ttsUtter.rate=1.0;
+  window.speechSynthesis.speak(ttsUtter);
+  document.getElementById('tts-play').classList.add('active');
+}
+function ttsPause(){ if(window.speechSynthesis.speaking) window.speechSynthesis.pause(); }
+function ttsStop(){
+  window.speechSynthesis.cancel();
+  const p=document.getElementById('tts-play'); if(p) p.classList.remove('active');
+}
+
+// ===== TOAST =====
+function showToast(msg){
+  const old=document.querySelector('.toast'); if(old) old.remove();
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+</script>
+</body>
+</html>
