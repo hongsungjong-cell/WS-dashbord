@@ -666,13 +666,13 @@ function showChartOrEmpty(canvasId, nodataId, wrapId, hasData){
 // ===== TREND CHARTS =====
 async function loadTrendCharts(){
   destroyChart('trend'); destroyChart('mtd');
-  const {data,error}=await sb.from('monthly_brand_hl').select('*').order('year_month');
+  const {data,error}=await sb.from('monthly_brand_hl').select('*').order('month');
   const hasData=!error&&data&&data.length>0;
   showChartOrEmpty('trend-chart','trend-nodata','trend-wrap',hasData);
   showChartOrEmpty('mtd-chart','mtd-nodata','mtd-wrap',hasData);
   if(!hasData){console.warn('monthly_brand_hl error:',error);return;}
 
-  const months=[...new Set(data.map(d=>d.year_month))].sort();
+  const months=[...new Set(data.map(d=>d.month))].sort();
   const brands=[...new Set(data.map(d=>d.brand))].filter(Boolean);
   const palette={'Heineken':'#22c55e','Tiger':'#3b82f6','Edelweiss':'#a78bfa','Desperados':'#f59e0b','Birra Moretti':'#ec4899','Amstel':'#06b6d4','Sol':'#f97316','Lagunitas':'#84cc16','Gold':'#eab308'};
 
@@ -680,7 +680,7 @@ async function loadTrendCharts(){
     const color=palette[brand]||`hsl(${(i*41)%360},65%,55%)`;
     return {
       label:brand,
-      data:months.map(m=>{const r=data.find(d=>d.brand===brand&&d.year_month===m);return r?parseFloat(r.total_hl):0;}),
+      data:months.map(m=>{const r=data.find(d=>d.brand===brand&&d.month===m);return r?parseFloat(r.total_hl):0;}),
       borderColor:color,backgroundColor:color+'18',fill:false,tension:0.3,pointRadius:3
     };
   });
@@ -701,7 +701,7 @@ async function loadTrendCharts(){
   });
 
   // 월별 전체 HL 합계 + 전월 대비 증감률
-  const monthTotals=months.map(m=>data.filter(d=>d.year_month===m).reduce((s,d)=>s+parseFloat(d.total_hl||0),0));
+  const monthTotals=months.map(m=>data.filter(d=>d.month===m).reduce((s,d)=>s+parseFloat(d.total_hl||0),0));
   const mom=monthTotals.map((v,i)=>i===0?null:monthTotals[i-1]>0?((v-monthTotals[i-1])/monthTotals[i-1]*100).toFixed(1):null);
 
   chartInst.mtd=new Chart(document.getElementById('mtd-chart').getContext('2d'),{
@@ -728,13 +728,13 @@ async function loadTrendCharts(){
 // ===== SKU CHART =====
 async function loadSkuChart(){
   destroyChart('sku');
-  const {data,error}=await sb.from('sku_monthly_hl').select('*').order('year_month',{ascending:false});
+  const {data,error}=await sb.from('sku_monthly_hl').select('*').order('month',{ascending:false});
   const hasData=!error&&data&&data.length>0;
   showChartOrEmpty('sku-chart','sku-nodata','sku-wrap',hasData);
   if(!hasData){console.warn('sku_monthly_hl error:',error);return;}
 
-  const latestMonth=data[0].year_month;
-  const latest=data.filter(d=>d.year_month===latestMonth);
+  const latestMonth=data[0].month;
+  const latest=data.filter(d=>d.month===latestMonth);
   const sorted=[...latest].sort((a,b)=>parseFloat(b.total_hl)-parseFloat(a.total_hl)).slice(0,15);
   const maxHL=Math.max(...sorted.map(d=>parseFloat(d.total_hl)));
   const colors=sorted.map(d=>{const r=parseFloat(d.total_hl)/maxHL;return r>=0.6?'rgba(34,197,94,0.8)':r>=0.3?'rgba(245,158,11,0.8)':'rgba(239,68,68,0.8)';});
@@ -743,7 +743,7 @@ async function loadSkuChart(){
     type:'bar',
     data:{
       labels:sorted.map(d=>d.sku||d.item_name||'N/A'),
-      datasets:[{label:`HL (${latestMonth})`,data:sorted.map(d=>parseFloat(d.total_hl).toFixed(1)),backgroundColor:colors,borderRadius:4,borderSkipped:false}]
+      datasets:[{label:`HL (${latestMonth.replace('-','년 ')}월)`,data:sorted.map(d=>parseFloat(d.total_hl).toFixed(1)),backgroundColor:colors,borderRadius:4,borderSkipped:false}]
     },
     options:{
       indexAxis:'y',responsive:true,maintainAspectRatio:false,
@@ -759,14 +759,13 @@ async function loadSkuChart(){
 // ===== REGIONAL CHART =====
 async function loadRegionalChart(){
   destroyChart('regional');
-  const {data,error}=await sb.from('monthly_region_hl').select('*').order('year_month');
+  const {data,error}=await sb.from('monthly_region_hl').select('*').order('month');
   const hasData=!error&&data&&data.length>0;
   showChartOrEmpty('regional-chart','regional-nodata','regional-wrap',hasData);
   if(!hasData){console.warn('monthly_region_hl error:',error);return;}
 
-  const months=[...new Set(data.map(d=>d.year_month))].sort();
-  const regionKey=data[0].region!==undefined?'region':'new_sr';
-  const regions=[...new Set(data.map(d=>d[regionKey]))].filter(Boolean);
+  const months=[...new Set(data.map(d=>d.month))].sort();
+  const regions=[...new Set(data.map(d=>d.region))].filter(Boolean);
   const palette=['#22c55e','#3b82f6','#f59e0b','#a78bfa','#ef4444','#06b6d4','#f97316'];
 
   chartInst.regional=new Chart(document.getElementById('regional-chart').getContext('2d'),{
@@ -775,7 +774,7 @@ async function loadRegionalChart(){
       labels:months,
       datasets:regions.map((region,i)=>({
         label:region,
-        data:months.map(m=>{const r=data.find(d=>d[regionKey]===region&&d.year_month===m);return r?parseFloat(r.total_hl).toFixed(1):0;}),
+        data:months.map(m=>{const r=data.find(d=>d.region===region&&d.month===m);return r?parseFloat(r.total_hl).toFixed(1):0;}),
         backgroundColor:palette[i%palette.length]+'cc',borderRadius:3
       }))
     },
@@ -793,14 +792,13 @@ async function loadRegionalChart(){
 // ===== DIAGNOSIS CHART =====
 async function loadDiagnosisChart(){
   destroyChart('diagnosis');
-  const {data,error}=await sb.from('monthly_region_hl').select('*').order('year_month');
+  const {data,error}=await sb.from('monthly_region_hl').select('*').order('month');
   const hasData=!error&&data&&data.length>0;
   showChartOrEmpty('diagnosis-chart','diagnosis-nodata','diagnosis-wrap',hasData);
   if(!hasData){console.warn('monthly_region_hl error:',error);return;}
 
-  const months=[...new Set(data.map(d=>d.year_month))].sort();
-  const regionKey=data[0].region!==undefined?'region':'new_sr';
-  const regions=[...new Set(data.map(d=>d[regionKey]))].filter(Boolean);
+  const months=[...new Set(data.map(d=>d.month))].sort();
+  const regions=[...new Set(data.map(d=>d.region))].filter(Boolean);
   const palette=['#22c55e','#3b82f6','#f59e0b','#a78bfa','#ef4444','#06b6d4','#f97316'];
 
   const datasets=regions.map((region,i)=>{
@@ -808,7 +806,7 @@ async function loadDiagnosisChart(){
     const color=isDaejeon?'#22c55e':palette[i%palette.length];
     return {
       label:region,
-      data:months.map(m=>{const r=data.find(d=>d[regionKey]===region&&d.year_month===m);return r?parseFloat(r.total_hl).toFixed(1):0;}),
+      data:months.map(m=>{const r=data.find(d=>d.region===region&&d.month===m);return r?parseFloat(r.total_hl).toFixed(1):0;}),
       borderColor:color,backgroundColor:'transparent',
       borderWidth:isDaejeon?3:1.5,borderDash:isDaejeon?[]:[5,4],
       tension:0.3,pointRadius:isDaejeon?5:2,pointHoverRadius:isDaejeon?7:4
